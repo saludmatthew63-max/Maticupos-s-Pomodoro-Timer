@@ -2,7 +2,7 @@
 
 A Pomodoro timer built as a single self-contained HTML file. No frameworks, no build tools, no dependencies — pure HTML, CSS, and JavaScript.
 
-[Live Demo]((https://saludmatthew63-max.github.io/Maticupos-s-Pomodoro-Timer/))
+[Live Demo](https://saludmatthew63-max.github.io/Maticupos-s-Pomodoro-Timer/)
 
 ---
 
@@ -56,7 +56,7 @@ function redrawRing() {
 }
 ```
 
-### Bell synthesis  Web Audio API
+### Bell synthesis — Web Audio API
 
 The school bell is synthesized from a fundamental frequency plus two inharmonic partials, each with an exponential decay envelope, fed through a convolution reverb.
 
@@ -80,7 +80,7 @@ notes.forEach((freq, i) => {
 
 ### Photo backgrounds
 
-Each scene is a `position: fixed` div with `pointer-events: none`. Opacity is toggled via a CSS class transition. The Ken Burns effect is a pure CSS animation no JavaScript involved.
+Each scene is a `position: fixed` div with `pointer-events: none`. Opacity is toggled via a CSS class transition. The Ken Burns effect is a pure CSS animation — no JavaScript involved.
 
 ```css
 .bg-layer {
