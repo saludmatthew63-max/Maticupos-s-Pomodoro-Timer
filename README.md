@@ -1,9 +1,8 @@
 # Maticupo's Pomodoro
 
-A Pomodoro timer built as a single self-contained HTML file. No frameworks, no build tools, no dependencies  pure HTML, CSS, and JavaScript.
+A Pomodoro timer built as a single self-contained HTML file. No frameworks, no build tools, no dependencies — pure HTML, CSS, and JavaScript.
 
-**[Live Demo]([https://YOUR-USERNAME.github.io/Maticupos-s-Pomodoro-Timer](https://maticupo.github.io/Maticupos-s-Pomodoro-Timer
-))**
+[Live Demo](https://maticupo.github.io/Maticupos-s-Pomodoro-Timer)
 
 ---
 
@@ -81,7 +80,7 @@ notes.forEach((freq, i) => {
 
 ### Photo backgrounds
 
-Each scene is a `position: fixed` div with `pointer-events: none`. Opacity is toggled via a CSS class transition. The Ken Burns effect is a pure CSS animation  no JavaScript involved.
+Each scene is a `position: fixed` div with `pointer-events: none`. Opacity is toggled via a CSS class transition. The Ken Burns effect is a pure CSS animation no JavaScript involved.
 
 ```css
 .bg-layer {
@@ -142,6 +141,6 @@ maticupos-pomodoro/
 
 ## Credits
 
-**Photos**  Unsplash (Ben George, BREAKIFY, ayumi kubo, Ryoji Hayasaka). Licensed under the [Unsplash License](https://unsplash.com/license).
+**Photos** — Unsplash (Ben George, BREAKIFY, ayumi kubo, Ryoji Hayasaka). Licensed under the [Unsplash License](https://unsplash.com/license).
 
-**Music**  Streamed via SoundCloud. Artists: Closed on Sunday, Cozy, Aso, Dreamhop, jonzz, Bagas Satriyotomo, Ambition, joevio, Scoryx, AJota Beats, kisa, Samuel Kim, Enjoy Studying.
+**Music** — Streamed via SoundCloud. Artists: Closed on Sunday, Cozy, Aso, Dreamhop, jonzz, Bagas Satriyotomo, Ambition, joevio, Scoryx, AJota Beats, kisa, Samuel Kim, Enjoy Studying.
