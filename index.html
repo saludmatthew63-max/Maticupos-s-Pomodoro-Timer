@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Maticupo's Pomodoro</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&family=Zen+Kaku+Gothic+New:wght@300;400;700&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #0a0812;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  color: #f0ecff;
+}
+
+/* ── BACKGROUND PHOTOS ── */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  pointer-events: none;
+  animation: kbzoom 35s ease-in-out infinite alternate;
+}
+.bg-layer.active { opacity: 1; }
+@keyframes kbzoom { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+/* dark cinematic vignette — pointer-events none so it never blocks */
+.bg-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.62) 100%),
+    radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.45) 100%);
+}
+
+/* ── RAIN CANVAS ── */
+#rain-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.4s;
+}
+#rain-canvas.raining { opacity: 1; }
+
+/* ── ALL UI above z-index 10 ── */
+.top-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 5px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px;
+  padding: 4px 7px;
+  backdrop-filter: blur(16px);
+}
+.scene-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 30px;
+  padding: 5px 14px;
+  font-size: 11px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  color: rgba(240,236,255,0.5);
+  letter-spacing: .5px;
+  transition: color .2s;
+}
+.scene-btn:hover { color: #f0ecff; }
+.scene-btn.active {
+  background: rgba(255,255,255,0.12);
+  color: #f0ecff;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.music-btn {
+  position: fixed;
+  top: 16px; right: 20px;
+  z-index: 50;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px;
+  padding: 6px 15px;
+  font-size: 11px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  color: rgba(240,236,255,0.5);
+  cursor: pointer;
+  letter-spacing: .5px;
+  backdrop-filter: blur(16px);
+  transition: all .2s;
+}
+.music-btn:hover { color: #f0ecff; }
+.music-btn.on { color: #c4b8ff; border-color: rgba(196,184,255,0.35); }
+
+/* volume panel */
+.vol-panel {
+  position: fixed;
+  top: 54px; right: 20px;
+  z-index: 50;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(16px);
+}
+.vol-panel.open { display: flex; }
+.vol-label {
+  font-size: 10px;
+  color: rgba(220,210,255,0.45);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+}
+.vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px; height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.15);
+  outline: none;
+  cursor: pointer;
+}
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #c4b8ff;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(196,184,255,0.5);
+}
+.vol-slider::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #c4b8ff;
+  cursor: pointer;
+  border: none;
+}
+.vol-value {
+  font-size: 10px;
+  color: rgba(220,210,255,0.45);
+  width: 28px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  text-align: right;
+}
+
+/* ── MAIN APP ── */
+.app {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 400px;
+  animation: fadeup .9s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes fadeup { from { opacity:0; transform:translateY(26px); } to { opacity:1; transform:translateY(0); } }
+
+.header { text-align: center; margin-bottom: 16px; }
+.header-sub {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 10px; font-weight: 300;
+  letter-spacing: 6px;
+  color: rgba(220,210,255,0.42);
+  margin-bottom: 4px;
+}
+.header-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 22px; font-weight: 700;
+  background: linear-gradient(135deg, #ffd4e8, #c4b8ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mode-tabs {
+  display: flex; gap: 5px;
+  margin-bottom: 16px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 40px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(16px);
+}
+.tab {
+  padding: 6px 14px;
+  border-radius: 40px;
+  font-size: 11px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: rgba(240,236,255,0.5);
+  transition: all .2s;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+}
+.tab:hover { color: #f0ecff; }
+.tab.active { font-weight: 700; color: #0d0f1f; }
+.tab.active.work  { background: #f0a0c0; }
+.tab.active.short { background: #7068c8; color: #fff; }
+.tab.active.long  { background: #5aafb0; color: #fff; }
+
+.timer-card {
+  width: 100%;
+  background: rgba(8,6,18,0.72);
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 26px 30px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  backdrop-filter: blur(26px);
+  position: relative;
+}
+.timer-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240,160,192,0.28), transparent);
+  pointer-events: none;
+}
+
+.ring-wrap { position: relative; width: 196px; height: 196px; }
+.ring-wrap svg { position: absolute; top: 0; left: 0; }
+.ring-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.time-display {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 50px; font-weight: 300;
+  letter-spacing: -2px; line-height: 1;
+  color: #fff;
+}
+.time-label {
+  font-size: 9px; letter-spacing: 4px;
+  color: rgba(220,210,255,0.42);
+  margin-top: 4px; text-transform: uppercase;
+}
+
+.controls { display: flex; align-items: center; gap: 12px; }
+
+.btn-play {
+  width: 62px; height: 62px;
+  border-radius: 50%; border: none;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .14s;
+}
+.btn-play:active { transform: scale(.91); }
+.btn-play.work  { background: #f0a0c0; box-shadow: 0 0 28px rgba(240,160,192,.35); }
+.btn-play.short { background: #7068c8; box-shadow: 0 0 28px rgba(112,104,200,.35); }
+.btn-play.long  { background: #5aafb0; box-shadow: 0 0 28px rgba(90,175,176,.35); }
+
+.play-icon {
+  border-style: solid;
+  border-width: 9px 0 9px 16px;
+  border-color: transparent transparent transparent rgba(0,0,0,.65);
+  margin-left: 3px;
+}
+.pause-bars { display: flex; gap: 4px; }
+.pause-bar { width: 4px; height: 17px; background: rgba(0,0,0,.65); border-radius: 2px; }
+
+.btn-sec {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.35);
+  cursor: pointer;
+  font-size: 15px;
+  color: rgba(255,255,255,0.38);
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+  font-family: inherit;
+}
+.btn-sec:hover { color: #fff; border-color: rgba(255,255,255,.3); }
+
+.dots { display: flex; gap: 7px; }
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  transition: all .3s;
+}
+.dot.done { background: #f0a0c0; border-color: #f0a0c0; }
+.dot.current { border-color: #f0a0c0; animation: dpulse 1.5s ease-in-out infinite; }
+@keyframes dpulse {
+  0%,100% { box-shadow: 0 0 3px rgba(240,160,192,.2); }
+  50%      { box-shadow: 0 0 10px rgba(240,160,192,.6); }
+}
+
+.kaizen { margin-top: 13px; text-align: center; }
+.kaizen-en { font-size: 10px; color: rgba(220,210,255,0.4); letter-spacing: 2.5px; margin-bottom: 3px; }
+.kaizen-jp { font-family: 'Noto Serif JP', serif; font-size: 19px; font-weight: 300; color: rgba(255,255,255,0.26); letter-spacing: 8px; }
+
+.gear-row { display: flex; justify-content: center; margin-top: 10px; }
+.settings-panel {
+  width: 100%; margin-top: 9px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 15px 19px;
+  display: none;
+  flex-direction: column; gap: 10px;
+  backdrop-filter: blur(20px);
+}
+.settings-panel.open { display: flex; }
+.settings-title { font-size: 9px; letter-spacing: 3px; color: rgba(220,210,255,0.35); margin-bottom: 2px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; }
+.setting-label { font-size: 11px; color: rgba(240,236,255,0.5); }
+.setting-input {
+  width: 62px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 7px;
+  text-align: center;
+  outline: none;
+}
+.setting-input:focus { border-color: rgba(196,184,255,.45); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  top: 18px; left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  z-index: 200;
+  background: rgba(0,0,0,0.82);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 10px 22px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #fff;
+  text-align: center;
+  white-space: pre-line;
+  max-width: 88vw;
+  backdrop-filter: blur(16px);
+  transition: transform .4s cubic-bezier(.16,1,.3,1);
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── TRACK PICKER ── */
+.track-btn {
+  position: fixed;
+  bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px;
+  padding: 6px 18px;
+  font-size: 11px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  color: rgba(240,236,255,0.45);
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  letter-spacing: .5px;
+  transition: all .2s;
+}
+.track-btn:hover { color: #f0ecff; }
+
+.track-panel {
+  display: none;
+  position: fixed;
+  bottom: 56px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 460px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(4,2,12,0.94);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 14px 16px;
+  backdrop-filter: blur(24px);
+}
+.track-panel.open { display: block; }
+.track-panel-title { font-size: 9px; letter-spacing: 3px; color: rgba(220,210,255,0.3); margin-bottom: 10px; }
+.track-tag { font-size: 9px; letter-spacing: 2px; color: rgba(220,210,255,0.28); margin: 8px 0 4px; }
+.track-row {
+  display: block; width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  color: rgba(240,236,255,0.5);
+  letter-spacing: .3px;
+  transition: all .18s;
+}
+.track-row:hover { background: rgba(255,255,255,0.06); color: #f0ecff; }
+.track-row.playing { color: #f0a0c0; background: rgba(240,160,192,0.1); }
+
+.credit {
+  position: fixed;
+  bottom: 12px; right: 14px;
+  z-index: 50;
+  font-size: 9px;
+  color: rgba(255,255,255,0.2);
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<!-- Background photo layers — z-index 0, pointer-events none -->
+<div class="bg-layer" id="bg0" style="background-image:url('https://images.unsplash.com/photo-1740820929765-0927dff76b8f?w=1920&q=85&auto=format&fit=crop')"></div>
+<div class="bg-layer" id="bg1" style="background-image:url('https://images.unsplash.com/photo-1645343182679-bf59289a9c89?w=1920&q=85&auto=format&fit=crop')"></div>
+<div class="bg-layer" id="bg2" style="background-image:url('https://images.unsplash.com/photo-1676380249087-ba6fc4088575?w=1920&q=85&auto=format&fit=crop')"></div>
+<div class="bg-layer" id="bg3" style="background-image:url('https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=1920&q=85&auto=format&fit=crop')"></div>
+
+<!-- Vignette overlay — pointer-events none, purely visual -->
+<div class="bg-vignette"></div>
+
+<!-- Rain canvas — pointer-events none -->
+<canvas id="rain-canvas" class="raining"></canvas>
+
+<!-- ── TOP BAR ── -->
+<div class="top-bar">
+  <button class="scene-btn active" onclick="setScene(0)">Rural Rain</button>
+  <button class="scene-btn"        onclick="setScene(1)">Tokyo Night</button>
+  <button class="scene-btn"        onclick="setScene(2)">Kyoto Shrine</button>
+  <button class="scene-btn"        onclick="setScene(3)">Countryside</button>
+</div>
+
+<button class="music-btn" id="music-btn" onclick="toggleMusic()" oncontextmenu="toggleVolPanel(event)">♪ Music Off</button>
+<button id="vol-btn" onclick="toggleVolPanel(event)" style="
+  position:fixed;top:16px;right:132px;z-index:50;
+  background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.1);
+  border-radius:40px;padding:6px 12px;font-size:11px;
+  font-family:'Zen Kaku Gothic New',sans-serif;color:rgba(240,236,255,0.4);
+  cursor:pointer;backdrop-filter:blur(16px);transition:all .2s;letter-spacing:.3px;
+" title="Volume">🔊</button>
+<div class="vol-panel" id="vol-panel">
+  <span class="vol-label">🔊 Volume</span>
+  <input class="vol-slider" type="range" id="vol-slider" min="0" max="100" value="80" oninput="setVolume(this.value)"/>
+  <span class="vol-value" id="vol-value">80%</span>
+</div>
+
+<!-- Hidden SoundCloud iframe -->
+<iframe id="sc-frame" allow="autoplay"
+  style="position:fixed;width:1px;height:1px;top:-100px;left:-100px;border:none;opacity:0;pointer-events:none;">
+</iframe>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ── MAIN APP ── -->
+<div class="app">
+  <div class="header">
+    <div class="header-sub">Maticupo's</div>
+    <div class="header-title">Pomodoro Timer</div>
+  </div>
+
+  <div class="mode-tabs">
+    <button class="tab active work"  data-mode="work"  onclick="setMode('work')">Focus</button>
+    <button class="tab short"        data-mode="short" onclick="setMode('short')">Short Break</button>
+    <button class="tab long"         data-mode="long"  onclick="setMode('long')">Long Break</button>
+  </div>
+
+  <div class="timer-card">
+    <div class="ring-wrap">
+      <svg width="196" height="196" viewBox="0 0 196 196">
+        <circle cx="98" cy="98" r="84" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="6"/>
+        <circle id="ring" cx="98" cy="98" r="84" fill="none"
+          stroke="#f0a0c0" stroke-width="6" stroke-linecap="round"
+          stroke-dasharray="527.79" stroke-dashoffset="0"
+          transform="rotate(-90 98 98)"/>
+      </svg>
+      <div class="ring-center">
+        <div class="time-display" id="time-display">25:00</div>
+        <div class="time-label"   id="time-label">Focus</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-sec" onclick="skipBack()">↺</button>
+      <button class="btn-play work" id="play-btn" onclick="toggleTimer()">
+        <div id="play-icon"><div class="play-icon"></div></div>
+      </button>
+      <button class="btn-sec" onclick="skipFwd()">⏭</button>
+    </div>
+
+    <div class="dots" id="dots"></div>
+  </div>
+
+  <div class="kaizen">
+    <div class="kaizen-en">continuous improvement</div>
+    <div class="kaizen-jp">改善</div>
+  </div>
+
+  <div class="gear-row">
+    <button class="btn-sec" onclick="toggleSettings()"
+      style="width:30px;height:30px;font-size:12px;">⚙</button>
+  </div>
+
+  <div class="settings-panel" id="settings-panel">
+    <div class="settings-title">Timer Settings</div>
+    <div class="setting-row">
+      <span class="setting-label">Focus (min)</span>
+      <input class="setting-input" type="number" id="set-work"    value="25" min="1" max="90" onchange="applySettings()">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Short break</span>
+      <input class="setting-input" type="number" id="set-short"   value="5"  min="1" max="30" onchange="applySettings()">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Long break</span>
+      <input class="setting-input" type="number" id="set-long"    value="15" min="1" max="60" onchange="applySettings()">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Sessions before long break</span>
+      <input class="setting-input" type="number" id="set-sessions" value="4" min="2" max="8"  onchange="applySettings()">
+    </div>
+  </div>
+</div>
+
+<!-- Track picker -->
+<button class="track-btn" onclick="toggleTrackPanel()">♬ Choose Track</button>
+<div class="track-panel" id="track-panel">
+  <div class="track-panel-title">選曲 · SELECT TRACK</div>
+  <div id="track-list"></div>
+</div>
+
+<div class="credit" id="credit"></div>
+
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<script>
+/* ════════════════════════════════════════════
+   SCENES
+════════════════════════════════════════════ */
+const SCENES = [
+  { bg:'bg0', rain:true,  label:'Rural Rain',   credit:'Ben George / Unsplash — Rainy rural Japan' },
+  { bg:'bg1', rain:true,  label:'Tokyo Night',  credit:'BREAKIFY / Unsplash — Tokyo rainy night'   },
+  { bg:'bg2', rain:false, label:'Kyoto Shrine', credit:'ayumi kubo / Unsplash — Kyoto lanterns'    },
+  { bg:'bg3', rain:false, label:'Countryside',  credit:'Ryoji Hayasaka / Unsplash — Japanese countryside' },
+];
+let sceneIdx = 0;
+
+function setScene(i) {
+  document.getElementById(SCENES[sceneIdx].bg).classList.remove('active');
+  sceneIdx = i;
+  document.getElementById(SCENES[i].bg).classList.add('active');
+  document.querySelectorAll('.scene-btn').forEach((b,idx) => b.classList.toggle('active', idx===i));
+  document.getElementById('rain-canvas').classList.toggle('raining', SCENES[i].rain);
+  document.getElementById('credit').textContent = SCENES[i].credit;
+}
+function nextScene() { setScene((sceneIdx + 1) % SCENES.length); }
+
+// init first scene
+document.getElementById('bg0').classList.add('active');
+document.getElementById('credit').textContent = SCENES[0].credit;
+
+/* ════════════════════════════════════════════
+   RAIN
+════════════════════════════════════════════ */
+const rainCanvas = document.getElementById('rain-canvas');
+const rctx = rainCanvas.getContext('2d');
+const drops = Array.from({length:220}, () => ({
+  x: Math.random() * 1800,
+  y: Math.random() * 1000,
+  len: Math.random() * 18 + 7,
+  speed: Math.random() * 7 + 4,
+  opacity: Math.random() * 0.38 + 0.07,
+  width: Math.random() * 0.5 + 0.25,
+}));
+function resizeRain() { rainCanvas.width = innerWidth; rainCanvas.height = innerHeight; }
+resizeRain(); addEventListener('resize', resizeRain);
+
+(function rainLoop() {
+  requestAnimationFrame(rainLoop);
+  rctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+  if (!SCENES[sceneIdx].rain) return;
+  drops.forEach(d => {
+    d.y += d.speed; d.x -= d.speed * 0.14;
+    if (d.y > rainCanvas.height + 10) { d.y = -10; d.x = Math.random() * rainCanvas.width; }
+    if (d.x < -10) d.x = rainCanvas.width;
+    rctx.beginPath();
+    rctx.moveTo(d.x, d.y);
+    rctx.lineTo(d.x - d.len * 0.12, d.y + d.len);
+    rctx.strokeStyle = `rgba(185,215,255,${d.opacity})`;
+    rctx.lineWidth = d.width;
+    rctx.stroke();
+  });
+})();
+
+/* ════════════════════════════════════════════
+   SCHOOL BELL
+════════════════════════════════════════════ */
+let bellCtx = null;
+function playBell() {
+  if (!bellCtx) bellCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = bellCtx;
+  const M = ctx.createGain(); M.gain.value = 0.5; M.connect(ctx.destination);
+  const rv = ctx.createConvolver();
+  const rb = ctx.createBuffer(2, ctx.sampleRate * 3, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = rb.getChannelData(c);
+    for (let i = 0; i < rb.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/rb.length, 1.7);
+  }
+  rv.buffer = rb;
+  const rg = ctx.createGain(); rg.gain.value = 0.4; rv.connect(rg); rg.connect(M);
+  const notes = [659.25, 523.25, 587.33, 392.00];
+  const gaps  = [0, 0.7, 1.4, 2.1];
+  [0, 3.4].forEach((offset, pass) => {
+    notes.forEach((freq, i) => {
+      const t0 = ctx.currentTime + gaps[i] + offset + 0.04;
+      [[freq, 0.55], [freq*2.756, 0.13], [freq*5.404, 0.04]].forEach(([f, pk]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(pk * (pass ? 0.45 : 1), t0 + 0.007);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.0);
+        o.connect(g); g.connect(M); g.connect(rv);
+        o.start(t0); o.stop(t0 + 2.2);
+      });
+    });
+  });
+}
+
+/* ════════════════════════════════════════════
+   TOAST CHIME — soft single ding, distinct from session bell
+════════════════════════════════════════════ */
+function playToastChime() {
+  if (!bellCtx) bellCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = bellCtx;
+  const M = ctx.createGain(); M.gain.value = 0.35; M.connect(ctx.destination);
+  // Soft reverb
+  const rv = ctx.createConvolver();
+  const rb = ctx.createBuffer(2, ctx.sampleRate * 1.2, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = rb.getChannelData(ch);
+    for (let i = 0; i < rb.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/rb.length, 2.5);
+  }
+  rv.buffer = rb;
+  const rg = ctx.createGain(); rg.gain.value = 0.3; rv.connect(rg); rg.connect(M);
+  // Single soft high bell tone — G5 (784 Hz), light and airy
+  [[784, 0.5], [784*2.756, 0.1]].forEach(([freq, pk]) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    const t0 = ctx.currentTime + 0.02;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(pk, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.1);
+    o.connect(g); g.connect(M); g.connect(rv);
+    o.start(t0); o.stop(t0 + 1.2);
+  });
+}
+
+/* ════════════════════════════════════════════
+   SOUNDCLOUD MUSIC
+════════════════════════════════════════════ */
+const TRACKS = [
+  { id:'1722293154', type:'tracks',    label:'AC New Horizons Lofi 1hr',          tag:'🍃 Animal Crossing' },
+  { id:'685678987',  type:'tracks',    label:'AC Lofi Hip Hop Mix',               tag:'🍃 Animal Crossing' },
+  { id:'410146128',  type:'tracks',    label:'AC Lofi Beats',                     tag:'🍃 Animal Crossing' },
+  { id:'823212007',  type:'tracks',    label:'AC New Horizons Hiphop Mix',        tag:'🍃 Animal Crossing' },
+  { id:'808003029',  type:'playlists', label:'AC Lofi Playlist',                  tag:'🍃 Animal Crossing' },
+  { id:'1507524304', type:'playlists', label:'AC Lofi Playlist ❀',               tag:'🍃 Animal Crossing' },
+  { id:'963437248',  type:'tracks',    label:'Spirited Away — Name of Life',      tag:'🏮 Ghibli' },
+  { id:'833838307',  type:'tracks',    label:'Spirited Away — Name of Life v2',   tag:'🏮 Ghibli' },
+  { id:'973401463',  type:'tracks',    label:"One Summer's Day Lofi",             tag:'🏮 Ghibli' },
+  { id:'323053626',  type:'tracks',    label:'Studio Ghibli Lofi Mix',            tag:'🏮 Ghibli' },
+  { id:'1124225692', type:'tracks',    label:'Sparkle — Your Name Lofi',          tag:'🎌 Anime' },
+  { id:'1297901203', type:'tracks',    label:'Kataware Doki — Your Name Lofi',    tag:'🎌 Anime' },
+  { id:'998658676',  type:'tracks',    label:'Gurenge — Demon Slayer Lofi',       tag:'🎌 Anime' },
+  { id:'1188379504', type:'tracks',    label:'Zankyosanka — Demon Slayer Lofi',   tag:'🎌 Anime' },
+  { id:'1139723650', type:'tracks',    label:'Rengoku Theme — Demon Slayer Lofi', tag:'🎌 Anime' },
+  { id:'938584678',  type:'tracks',    label:'Japanese Lofi Study Mix',           tag:'🗾 Japan Lofi' },
+];
+
+let musicOn = false, scWidget = null, scReady = false, currentTrack = 0;
+
+function scSrc(idx) {
+  const t = TRACKS[idx];
+  return `https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/${t.type}/${t.id}` +
+    `&color=%23f0a0c0&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false`;
+}
+
+function loadTrack(idx, play) {
+  currentTrack = idx;
+  scReady = false;
+  const frame = document.getElementById('sc-frame');
+  frame.src = scSrc(idx);
+  scWidget = SC.Widget(frame);
+  scWidget.bind(SC.Widget.Events.READY, () => {
+    scReady = true;
+    scWidget.setVolume(80);
+    if (play) scWidget.play();
+  });
+  document.querySelectorAll('.track-row').forEach((r,i) => r.classList.toggle('playing', i===idx));
+}
+
+function toggleMusic() {
+  if (!scWidget) { loadTrack(currentTrack, true); musicOn = true; }
+  else if (!scReady) { setTimeout(toggleMusic, 250); return; }
+  else if (musicOn) { scWidget.pause(); musicOn = false; }
+  else { scWidget.play(); musicOn = true; }
+  const btn = document.getElementById('music-btn');
+  btn.textContent = musicOn ? '♪ Music On' : '♪ Music Off';
+  btn.classList.toggle('on', musicOn);
+}
+
+function toggleVolPanel(e) {
+  if (e) e.preventDefault();
+  document.getElementById('vol-panel').classList.toggle('open');
+}
+// Close vol panel when clicking elsewhere
+document.addEventListener('click', e => {
+  const vp = document.getElementById('vol-panel');
+  const vb = document.getElementById('vol-btn');
+  const mb = document.getElementById('music-btn');
+  if (!vp.contains(e.target) && e.target !== vb && e.target !== mb) {
+    vp.classList.remove('open');
+  }
+});
+
+function setVolume(val) {
+  document.getElementById('vol-value').textContent = val + '%';
+  if (scWidget && scReady) scWidget.setVolume(parseInt(val));
+}
+
+function toggleTrackPanel() {
+  document.getElementById('track-panel').classList.toggle('open');
+}
+
+function buildTrackList() {
+  const list = document.getElementById('track-list');
+  let lastTag = '';
+  TRACKS.forEach((t, i) => {
+    if (t.tag !== lastTag) {
+      lastTag = t.tag;
+      const sep = document.createElement('div');
+      sep.className = 'track-tag';
+      sep.textContent = t.tag;
+      list.appendChild(sep);
+    }
+    const btn = document.createElement('button');
+    btn.className = 'track-row' + (i === 0 ? ' playing' : '');
+    btn.textContent = t.label;
+    btn.onclick = () => {
+      loadTrack(i, true);
+      if (!musicOn) {
+        musicOn = true;
+        document.getElementById('music-btn').textContent = '♪ Music On';
+        document.getElementById('music-btn').classList.add('on');
+      }
+      toggleTrackPanel();
+    };
+    list.appendChild(btn);
+  });
+}
+buildTrackList();
+
+/* ════════════════════════════════════════════
+   JAPANESE VOICE ANNOUNCEMENTS
+   Uses Web Speech API — built into all modern browsers.
+   Picks a Japanese voice if available, falls back gracefully.
+════════════════════════════════════════════ */
+const ANNOUNCEMENTS = [
+  '次の駅は渋谷です。',
+  '次の駅は新宿です。',
+  '次の駅は原宿です。',
+  '次の駅は上野です。',
+  '次の駅は銀座です。',
+  '次の駅は秋葉原です。',
+  '次の駅は浅草です。',
+  'まもなく京都に到着します。',
+  '発車します。ご注意ください。',
+  'ドアが閉まります。',
+  'お忘れ物のないようにご注意ください。',
+  '次は終点、東京です。',
+  '本日もご乗車ありがとうございます。',
+  'まもなく終点に到着します。',
+  'お疲れ様でした。',
+  'よく頑張りました！',
+  '少し休んでください。',
+  'また頑張りましょう！',
+];
+let lastAnn = -1;
+
+function getAnnouncement() {
+  let i;
+  do { i = Math.floor(Math.random() * ANNOUNCEMENTS.length); } while (i === lastAnn);
+  lastAnn = i;
+  return ANNOUNCEMENTS[i];
+}
+
+// Find best Japanese voice — prefers female voices for that anime vibe
+let jpVoice = null;
+function loadVoices() {
+  const voices = window.speechSynthesis.getVoices();
+  // Priority: Japanese female > Japanese any > default
+  jpVoice =
+    voices.find(v => v.lang.startsWith('ja') && /female|woman|kyoko|haruka|otoya|mizuki|hana/i.test(v.name)) ||
+    voices.find(v => v.lang.startsWith('ja')) ||
+    null;
+}
+loadVoices();
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+// Speak the announcement — delayed so it plays AFTER the bell fades
+function speakAnnouncement(text, delayMs = 2800) {
+  if (!window.speechSynthesis) return;
+  setTimeout(() => {
+    speechSynthesis.cancel(); // clear any queued speech
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'ja-JP';
+    utt.rate = 0.88;      // slightly slower — more dramatic / anime feel
+    utt.pitch = 1.15;     // slightly higher pitch — softer, more feminine
+    utt.volume = 0.92;
+    if (jpVoice) utt.voice = jpVoice;
+    speechSynthesis.speak(utt);
+  }, delayMs);
+}
+
+/* ════════════════════════════════════════════
+   TIMER
+════════════════════════════════════════════ */
+const CIRC = 2 * Math.PI * 84; // 527.79
+let cfg = { work: 25, short: 5, long: 15, sessions: 4 };
+let mode = 'work', total = 25*60, rem = 25*60;
+let running = false, startTs = null, startRem = 25*60, lastSec = -1, completed = 0;
+
+const MODES = {
+  work:  { color: '#f0a0c0', label: 'Focus',       cls: 'work'  },
+  short: { color: '#7068c8', label: 'Short Break',  cls: 'short' },
+  long:  { color: '#5aafb0', label: 'Long Break',   cls: 'long'  },
+};
+
+function setMode(m) {
+  mode = m; running = false; startTs = null;
+  total = cfg[m] * 60; rem = total; startRem = rem; lastSec = -1;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.remove('active');
+    if (t.dataset.mode === m) t.classList.add('active');
+  });
+  redrawRing(); redrawTime(); setPlayBtn(false);
+}
+
+function advanceMode() {
+  const n = parseInt(document.getElementById('set-sessions').value) || 4;
+  if (mode === 'work') {
+    completed++;
+    redrawDots();
+    setMode(completed % n === 0 ? 'long' : 'short');
+  } else {
+    setMode('work');
+  }
+}
+
+function redrawRing() {
+  const el = document.getElementById('ring');
+  el.style.strokeDashoffset = CIRC * (1 - rem / total);
+  el.style.stroke = MODES[mode].color;
+}
+function redrawTime() {
+  const m = Math.floor(rem / 60), s = rem % 60;
+  document.getElementById('time-display').textContent =
+    String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  document.getElementById('time-label').textContent = MODES[mode].label;
+}
+function setPlayBtn(playing) {
+  document.getElementById('play-icon').innerHTML = playing
+    ? '<div class="pause-bars"><div class="pause-bar"></div><div class="pause-bar"></div></div>'
+    : '<div class="play-icon"></div>';
+  document.getElementById('play-btn').className = 'btn-play ' + MODES[mode].cls;
+}
+
+function toggleTimer() {
+  if (running) {
+    running = false; startTs = null; setPlayBtn(false);
+  } else {
+    running = true; startTs = performance.now(); startRem = rem;
+    setPlayBtn(true); tick();
+  }
+}
+
+function tick() {
+  if (!running) return;
+  requestAnimationFrame(tick);
+  const elapsed = (performance.now() - startTs) / 1000;
+  const s = Math.ceil(Math.max(0, startRem - elapsed));
+  if (s === lastSec) return;
+  lastSec = s; rem = s;
+  redrawRing(); redrawTime();
+  if (rem <= 0) onSessionEnd();
+}
+
+function onSessionEnd() {
+  running = false; startTs = null; setPlayBtn(false);
+  const ann = getAnnouncement();
+  playBell();
+  showToast((mode === 'work' ? '🌸 集中完了' : '🌸 休憩終了') + '\n' + ann);
+  speakAnnouncement(ann);
+  nextScene();
+  setTimeout(advanceMode, 500);
+}
+
+function skipBack() {
+  running = false; startTs = null; rem = total; startRem = rem; lastSec = -1;
+  redrawRing(); redrawTime(); setPlayBtn(false);
+  const ann = getAnnouncement();
+  showToast('🔄 タイマーリセット\n' + ann);
+  speakAnnouncement(ann, 600);
+}
+function skipFwd() {
+  running = false; startTs = null; setPlayBtn(false);
+  const ann = getAnnouncement();
+  playBell();
+  showToast((mode === 'work' ? '🌸 集中完了' : '🌸 休憩終了') + '\n' + ann);
+  speakAnnouncement(ann);
+  nextScene();
+  setTimeout(advanceMode, 500);
+}
+
+function redrawDots() {
+  const n = parseInt(document.getElementById('set-sessions').value) || 4;
+  const el = document.getElementById('dots'); el.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    const c = completed % n;
+    if (i < c) d.classList.add('done');
+    else if (i === c && mode === 'work') d.classList.add('current');
+    el.appendChild(d);
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  playToastChime();
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+function toggleSettings() {
+  document.getElementById('settings-panel').classList.toggle('open');
+}
+function applySettings() {
+  cfg.work  = parseInt(document.getElementById('set-work').value)     || 25;
+  cfg.short = parseInt(document.getElementById('set-short').value)    || 5;
+  cfg.long  = parseInt(document.getElementById('set-long').value)     || 15;
+  setMode(mode); redrawDots();
+}
+
+// Init
+redrawTime(); redrawRing(); redrawDots();
+</script>
+</body>
+</html>
